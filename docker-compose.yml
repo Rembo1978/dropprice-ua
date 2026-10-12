@@ -1,0 +1,70 @@
+networks:
+  droppriceapp:
+
+
+
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    container_name: dropprice_db
+    restart: always
+    environment:
+      POSTGRES_DB: dropprice_db
+      POSTGRES_USER: dropprice_user
+      POSTGRES_PASSWORD: dropprice_password
+    volumes:
+      - ${PGDATA_PATH:-./volumes/postgres_data}:/var/lib/postgresql
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dropprice_user -d dropprice_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "54322:5432"
+
+    networks:
+      - droppriceapp
+
+  redis:
+    image: redis:latest
+    container_name: dropprice_redis
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - ./volumes/redis_data:/data
+    ports:
+      - "6382:6379"
+    networks:
+      - droppriceapp
+
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: dropprice_browserless
+    ports:
+      - "3000:3000"
+    environment:
+      - TOKEN=your_secret_token_here
+      - CONCURRENCY=10
+      - TIMEOUT=60000
+      # Вмикаємо розширений режим маскування (Stealth)
+      - ENABLE_STEALTH=true
+      # Додаткові прапорці запуску Chrome для приховування автоматизації
+      - DEFAULT_LAUNCH_ARGS=["--disable-blink-features=AutomationControlled","--no-sandbox","--disable-setuid-sandbox","--disable-infobars","--window-size=1920,1080"]
+      - MAX_QUEUE_LENGTH=10
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+      - DEMO=false
+      - DEFAULT_STEALTH=true
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+      - CONNECTION_TIMEOUT=60000
+    command: >
+      --disable-blink-features=AutomationControlled
+      --enable-webgl
+      --use-gl=angle
+      --use-angle=gl
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

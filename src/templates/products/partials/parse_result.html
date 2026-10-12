@@ -1,0 +1,190 @@
+{% comment %} <!-- templates/products/partials/parse_result.html -->
+{% load l10n %}
+{% if error %}
+    <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 border border-red-200" role="alert">
+        <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+            <span class="font-medium">Помилка парсингу:</span> {{ error }}
+        </div>
+    </div>
+{% elif product %}
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex flex-col md:flex-row gap-6 items-start">
+        {% if product.image_url %}
+            <div class="w-full md:w-52 h-52 bg-white border border-gray-100 rounded-lg p-2 flex items-center justify-center flex-shrink-0">
+                <img class="max-h-full max-w-full object-contain rounded" src="{{ product.image_url }}" alt="{{ product.title }}">
+            </div>
+        {% else %}
+            <div class="w-full md:w-52 h-52 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 flex-shrink-0">
+                Немає зображення
+            </div>
+        {% endif %}
+
+        <div class="flex-1 w-full">
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                {% if product.brand_name %}
+                    <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wide">
+                        {{ product.brand_name }}
+                    </span>
+                {% endif %}
+
+                {% if product.is_in_stock %}
+                    <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        В наявності
+                    </span>
+                {% else %}
+                    <span class="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        Немає в наявності
+                    </span>
+                {% endif %}
+            </div>
+
+            <h2 class="text-xl font-bold text-gray-900 mb-2">{{ product.title }}</h2>
+
+            {% if product.description %}
+                <p title="{{ product.description|striptags }}" class="text-sm text-gray-600 line-clamp-2 mb-4">{{ product.description|striptags }}</p>
+            {% endif %}
+
+            <div class=" my-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 border border-gray-100">
+                {% if product.gtin %}
+                    <div><span class="font-semibold text-gray-800 block">GTIN / EAN:</span> {{ product.gtin }}</div>
+                {% endif %}
+               
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between border-t border-gray-100 pt-4 mt-4 gap-4">
+                <div>
+                    <div class="text-xs text-gray-500 uppercase font-semibold">Поточна ціна</div>
+                    <span class="text-3xl font-extrabold text-gray-900">{{ product.price|floatformat:2 }}</span>
+                    <span class="text-lg text-gray-500 font-medium">{{ product.currency }}</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <a href="{{ product.url }}" target="_blank" rel="noopener noreferrer" class="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5">
+                        В магазин
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </a>
+                    
+
+                </div>
+            </div>
+
+
+
+
+
+            
+
+
+
+           
+
+            <!-- Блок Ціни та Переходу в Магазин -->
+
+
+            <!-- Стилізований блок налаштування сповіщення в Telegram -->
+            <form hx-post="/tracker/add/" 
+      hx-target="#tracker-response" 
+      class="mt-6 p-5 bg-gradient-to-br from-slate-50 to-blue-50/60 border border-blue-100/80 rounded-2xl shadow-sm" 
+      x-data="{ 
+          currentPrice: {{ product.price|unlocalize }}, 
+          targetPrice: {{ product.price|unlocalize }},
+          notifyOnIncrease: false,
+          get increasePrice() {
+              return (this.currentPrice * 1.01).toFixed(2);
+          }
+      }">
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+    <input type="hidden" name="product_url" value="{{ product.url }}">
+    <input type="hidden" name="current_price" value="{{ product.price|unlocalize }}">
+    <input type="hidden" name="currency" value="{{ product.currency }}">
+
+    <div class="flex items-center gap-2 mb-3">
+        <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+        <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Налаштувати сповіщення про ціну</h3>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+        <!-- Швидкі кнопки (Пресет знижок) -->
+        <div class="md:col-span-7 flex flex-wrap gap-1.5">
+            <button type="button" @click="targetPrice = (currentPrice * 0.97).toFixed(2)" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-2xs">
+                -3%
+            </button>
+            <button type="button" @click="targetPrice = (currentPrice * 0.95).toFixed(2)" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-2xs">
+                -5%
+            </button>
+            <button type="button" @click="targetPrice = (currentPrice * 0.93).toFixed(2)" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-2xs">
+                -7%
+            </button>
+            <button type="button" @click="targetPrice = (currentPrice * 0.90).toFixed(2)" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-2xs">
+                -10%
+            </button>
+            <button type="button" @click="targetPrice = (currentPrice - 0.01).toFixed(2)" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-2xs">
+                Будь-яка знижка
+            </button>
+        </div>
+
+        <!-- Поле Бажаної Ціни -->
+        <div class="md:col-span-5 relative">
+            <div class="relative rounded-lg shadow-2xs">
+                <input type="number" step="0.01" name="target_price" x-model="targetPrice" required placeholder="Бажана ціна" class="block w-full rounded-lg border-gray-300 pr-12 text-sm font-bold text-gray-900 focus:border-blue-500 focus:ring-blue-500">
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    <span class="text-xs font-bold text-gray-400">{{ product.currency }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Чекбокс сповіщення про ПОДОРОЖЧАННЯ (+1%) -->
+    <div class="mt-4 pt-3 border-t border-blue-100/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <label class="relative flex items-center cursor-pointer select-none group">
+            <input type="checkbox" name="notify_on_increase" x-model="notifyOnIncrease" class="sr-only peer">
+            <div class="w-4 h-4 rounded border border-gray-300 bg-white peer-checked:bg-amber-500 peer-checked:border-amber-500 transition-colors flex items-center justify-center">
+                <svg class="w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <span class="ml-2 text-xs font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
+                Сповістити, якщо товар подорожчає 📈 
+                <span x-show="notifyOnIncrease" x-transition class="text-amber-600 font-bold ml-1">
+                    (понад <span x-text="increasePrice"></span> {{ product.currency }})
+                </span>
+            </span>
+        </label>
+
+        <!-- Головна кнопка дії -->
+        <button type="submit" class="w-full sm:w-auto px-6 py-2.5 text-sm font-semibold text-white bg-[#24A1DE] hover:bg-[#1D86B9] rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 group">
+            <svg class="w-4 h-4 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                <path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.562 8.161c-.18.717-.962 4.084-1.362 5.462-.168.58-.381.775-.588.793-.45.04-1.791-.26-2.56-1.077-.923-.979-1.444-1.479-2.341-2.071-.854-.564-.301-.874.187-1.378.128-.132 2.348-2.152 2.39-2.335.006-.023.011-.11-.041-.157s-.125-.031-.179-.019c-.077.017-1.306.83-3.687 2.438-.349.239-.665.356-.948.35-.312-.007-.913-.177-1.36-.322-.548-.179-.984-.274-.946-.579.02-.159.238-.322.654-.49 2.566-1.117 4.277-1.854 5.133-2.21 2.441-1.015 2.947-1.192 3.278-1.198.073-.001.236.017.342.103.089.073.114.172.124.241.01.07.022.235.013.364z"/>
+            </svg>
+            <span>Відстежувати в Telegram</span>
+        </button>
+    </div>
+</form>
+
+            <div id="tracker-response" class="mt-3"></div>
+        </div>
+    </div>
+{% endif %} {% endcomment %}
+
+{% load l10n %}
+
+{% if error %}
+    <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800 shadow-2xs" role="alert">
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-red-100 rounded-lg text-red-600 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div>
+                <h4 class="font-bold text-red-900 text-base mb-1">Не вдалося завантажити товар</h4>
+                <p class="text-red-700 leading-relaxed">{{ error }}</p>
+                <p class="text-xs text-red-500 mt-2">
+                    Якщо ця помилка повторюється, можливо, магазин тимчасово обмежив автоматичний доступ. Ми вже працюємо над покращенням вирішенням цієї проблеми!
+                </p>
+            </div>
+        </div>
+    </div>
+{% endif %}

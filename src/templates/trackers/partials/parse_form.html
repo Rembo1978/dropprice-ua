@@ -1,0 +1,89 @@
+{% comment %} <!-- Search/Parse Form -->
+<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+    <form 
+        hx-post="{% url 'test_parse' %}" 
+        hx-target="#result-container" 
+        hx-indicator="#loading-spinner"
+        class="space-y-4"
+    >
+        {% csrf_token %}
+        <div>
+            <label for="url-input" class="block mb-2 text-sm font-medium text-gray-900">
+                Посилання на товар:
+            </label>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative w-full">
+                    <div class="absolute inset-y-0 inset-s-0 flex items-center ps-3.5 pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 105.656-5.656l-1.1 1.1" />
+                        </svg>
+                    </div>
+                    <input 
+                        type="url" 
+                        id="url-input"
+                        name="url" 
+                        required 
+                        placeholder="https://7tonn.com.ua/l47450600-salomon-xt-6-gore-tex" 
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-3"
+                    >
+                </div>
+                <button 
+                    id="AddSession"
+                    type="submit" 
+                    class="px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 flex items-center justify-center min-w-[150px] transition-colors"
+                >
+                    <span>Пропарсити</span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div> {% endcomment %}
+
+<!-- Search/Parse Form -->
+<div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+    <form 
+        hx-post="{% url 'test_parse' %}" 
+        hx-target="#result-container" 
+        hx-indicator="#loading-spinner"
+        class="space-y-4"
+    >
+        {% csrf_token %}
+        <div>
+            <label for="url-input" class="block mb-2 text-sm font-medium text-gray-900">
+                Посилання на товар:
+            </label>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="relative w-full">
+                    <div class="absolute inset-y-0 inset-s-0 flex items-center ps-3.5 pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 105.656-5.656l-1.1 1.1" />
+                        </svg>
+                    </div>
+                    <input 
+                        type="url" 
+                        id="url-input"
+                        name="url" 
+                        required 
+                        placeholder="https://7tonn.com.ua/l47450600-salomon-xt-6-gore-tex" 
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-3"
+                    >
+                </div>
+                <button 
+                    id="AddSession"
+                    type="submit" 
+                    class="px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 flex items-center justify-center min-w-[150px] transition-colors disabled:opacity-50"
+                >
+                    <span class="htmx-indicator-hide">Пропарсити</span>
+                    <!-- Спінер під час запиту -->
+                    <svg id="loading-spinner" class="htmx-indicator animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Сюди виводяться ТІЛЬКИ помилки, якщо парсинг не вдався -->
+    <div id="result-container" class="mt-4"></div>
+</div>

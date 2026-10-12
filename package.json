@@ -1,0 +1,23 @@
+{
+  "name": "dropprice-ua",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tailwindcss -i ./src/static/css/input.css -o ./src/static/css/output.css --watch",
+    "dev:clean": "npm run clean && npm run dev",
+    "build": "NODE_ENV=production tailwindcss -i ./src/static/css/input.css -o ./src/static/css/output.css --minify",
+    "clean": "rimraf ./src/static/css/output.css"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "dependencies": {
+    "flowbite": "^4.0.2"
+  }
+}
