@@ -1,32 +1,50 @@
-# products/models.py
+# src/products/models.py
 import random
 import re
 from django.db import models
 from django.utils.text import slugify
 from stores.models import Store
+from django_ckeditor_5.fields import CKEditor5Field
+from pgvector.django import VectorField, HnswIndex
+from django.db import IntegrityError, transaction
+from django.db.models import UniqueConstraint
+from django.db.models.functions import Lower
 
-# class Brand(models.Model):
-#     name = models.CharField(max_length=255, unique=True, verbose_name="Назва бренду")
-#     slug = models.SlugField(max_length=255, unique=True, db_index=True, verbose_name="Slug (для URL)")
-#     total = models.PositiveIntegerField(
-#             default=0,
-#             db_index=True,
-#             help_text="Кількість товарів цього бренду в базі",
-#             verbose_name="Кількість товарів"
-#         )
-#     is_active = models.BooleanField(default=False, verbose_name="Активний бренд")
-#     class Meta:
-#         verbose_name = "Бренд"
-#         verbose_name_plural = "Бренди"
-#         ordering = ['name']
 
-#     def __str__(self):
-#         return self.name
+class PriceRating(models.IntegerChoices):
+    VERY_GOOD = 1, "Дуже вигідна ціна"
+    GOOD = 2, "Вигідна ціна"
+    FAIR = 3, "Справедлива ціна"
+    HIGH = 4, "Висока ціна"
+    VERY_HIGH = 5, "Занадто висока ціна"
 
-#     def save(self, *args, **kwargs):
-#         if not self.slug:
-#             self.slug = slugify(self.name)
-#         super().save(*args, **kwargs)
+
+UA_TO_LAT = str.maketrans({
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'h', 'ґ': 'g',
+    'д': 'd', 'е': 'e', 'є': 'ye', 'ж': 'zh', 'з': 'z',
+    'и': 'y', 'і': 'i', 'ї': 'yi', 'й': 'y', 'к': 'k',
+    'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p',
+    'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f',
+    'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh',
+    'щ': 'shch', 'ю': 'yu', 'я': 'ya',
+    'ь': '', 'ъ': '', 'ы': 'y', 'э': 'e', 'ё': 'yo',
+    'і': 'i',
+})
+
+
+def translit_slug(value: str) -> str:
+    if not value:
+        return ''
+
+    value = value.strip().lower()
+
+    # Апострофи не повинні створювати зайвих роздільників.
+    value = value.replace('’', '').replace('ʼ', '').replace("'", '')
+
+    value = value.translate(UA_TO_LAT)
+
+    return slugify(value)
+
 
 class Brand(models.Model):
     """
@@ -51,10 +69,20 @@ class Brand(models.Model):
         null=True,
         verbose_name="URL логотипу"
     )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='synonyms',  # або 'children'
+        verbose_name="Головний (батьківський) бренд"
+    )
     is_active = models.BooleanField(
-        default=False,
+        default=False, db_index=True,
         verbose_name="Активний"
     )
+    is_top = models.BooleanField(default=False, db_index=True)
+    is_local = models.BooleanField(default=False, db_index=True)
     total = models.PositiveIntegerField(
         default=0,
         db_index=True,
@@ -87,33 +115,66 @@ class Brand(models.Model):
         verbose_name = "Бренд"
         verbose_name_plural = "Бренди"
         ordering = ['name']
+        constraints = [
+            UniqueConstraint(
+                Lower("name"),
+                name="brand_name_lower_uniq",
+            ),
+        ]
+
+    @classmethod
+    def get_or_create_by_name(cls, raw_name):
+        if not raw_name:
+            return None, False
+
+        clean_name = " ".join(raw_name.split())
+        if not clean_name:
+            return None, False
+
+        try:
+            with transaction.atomic():
+                brand, created = cls.objects.get_or_create(
+                    name__iexact=clean_name,
+                    defaults={
+                        "name": clean_name,
+                        "is_active": False,
+                    },
+                )
+        except IntegrityError:
+            # Інший процес міг створити цей бренд одночасно.
+            brand = cls.objects.get(name__iexact=clean_name)
+            created = False
+
+        # Якщо знайдений запис є синонімом,
+        # повертаємо канонічний бренд.
+        if brand.parent_id:
+            brand = brand.parent
+
+        return brand, created
 
     def __str__(self):
         return self.name
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            self.slug = translit_slug(self.name)
         super().save(*args, **kwargs)
+        
+    # @classmethod
+    # def get_or_create_by_name(cls, raw_name: str):
+    #     if not raw_name or not raw_name.strip():
+    #         return None, False
 
-    @classmethod
-    def get_or_create_by_name(cls, raw_name: str) -> tuple['Brand', bool]:
-        """
-        Хелпер для парсера: створює або повертає бренд із базовим очищенням рядка.
-        """
-        clean_name = raw_name.strip()
-        if not clean_name:
-            return None, False
+    #     clean_name = raw_name.strip()
 
-        brand, created = cls.objects.get_or_create(
-            name__iexact=clean_name,
-            defaults={
-                'name': clean_name,
-                'slug': slugify(clean_name),
-                'is_active': False
-            }
-        )
-        return brand, created
+    #     return cls.objects.get_or_create(
+    #         name__iexact=clean_name,
+    #         defaults={
+    #             'name': clean_name,
+    #             'is_active': False,
+    #         },
+    #     )
+
 
 
 class ProductTagGroup(models.Model):
@@ -154,13 +215,34 @@ class ProductTag(models.Model):
     )
     name = models.CharField(max_length=100, verbose_name="Назва тегу")
     slug = models.SlugField(max_length=100, unique=True, verbose_name="Slug (для URL)")
+    keywords = models.JSONField(default=list, blank=True)
+    seo_h1 = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        verbose_name="H1 Заголовок (на сторінці)"
+    )
+    meta_desc = models.TextField(
+        blank=True, 
+        null=True, 
+        verbose_name="Meta Description"
+    )
+
+    # Замінюємо старий desc на потужний SEO текст
+    seo_text = CKEditor5Field(
+        blank=True, 
+        null=True, 
+        config_name='extends',
+        verbose_name="SEO Текст (опис тега)"
+    )
     total = models.PositiveIntegerField(
                 default=0,
                 db_index=True,
                 help_text="Кількість товарів, які мають цей тег",
                 verbose_name="Кількість товарів"
             )
-
+    is_top = models.BooleanField(default=False, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     class Meta:
         verbose_name = "Тег товару"
         verbose_name_plural = "Теги товарів"
@@ -222,8 +304,43 @@ class Product(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True,
         verbose_name="Максимальна історична ціна"
     )
+    min_price_30_days = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name="Мінімальна історична ціна (30 днів)"
+    )
+    max_price_30_days = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name="Максимальна історична ціна (30 днів)"
+    )
+    avg_price_30_days = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        verbose_name="Середня історична ціна (30 днів)"
+    )
+    percent_deal = models.SmallIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Відхилення поточної ціни від середньої "
+            "історичної ціни у відсотках: "
+            "-20 означає на 20% дешевше, "
+            "+20 — на 20% дорожче."
+        ),
+    )
+    price_rating = models.PositiveSmallIntegerField(
+            choices=PriceRating.choices,
+            null=True,
+            blank=True,
+            default=None,
+            db_index=True,
+            verbose_name="Оцінка ціни",
+        )
     currency = models.CharField(max_length=10, default="UAH", verbose_name="Валюта")
-
+    search_vector = VectorField(
+        dimensions=768,
+        null=True,
+        blank=True,
+    )
     is_in_stock = models.BooleanField(default=True, verbose_name="Є в наявності")
 
     # Прапорець для адмінського каталогу (Топ-100 товарів для наповнення)
@@ -252,6 +369,15 @@ class Product(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Оновлено")
 
     class Meta:
+        indexes = [
+            HnswIndex(
+                name="product_vector_hnsw",
+                fields=["search_vector"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
         verbose_name = "Товар"
         verbose_name_plural = "Товари"
         ordering = ['-updated_at']
@@ -295,6 +421,17 @@ class PriceHistory(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Ціна")
     old_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Стара ціна")
     is_in_stock = models.BooleanField(default=True, verbose_name="В наявності")
+    percent_deal = models.SmallIntegerField(
+    null=True,
+    blank=True,
+    db_index=True,
+    help_text=(
+        "Відхилення поточної ціни від середньої "
+        "історичної ціни у відсотках: "
+        "-20 означає на 20% дешевше, "
+        "+20 — на 20% дорожче."
+    ),
+)
     recorded_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="Дата запису")
 
     class Meta:

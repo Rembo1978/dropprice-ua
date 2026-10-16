@@ -30,6 +30,7 @@ from curl_cffi import requests
 from playwright.sync_api import sync_playwright
 import nodriver as uc
 from scrapers.utils import extract_store_base_url
+import html
 # ==============================================================================
 #  Утиліти обробки URL
 # ==============================================================================
@@ -107,13 +108,119 @@ class UniversalProductScraper:
         self.browserless_token = os.getenv("BROWSERLESS_TOKEN", "your_secret_token_here")
         self.browserless_host = os.getenv("BROWSERLESS_HOST", "localhost:3000")
 
+    # def fetch_product_data(self, url: str) -> Optional[Dict[str, Any]]:
+    #     domain = self._extract_domain(url)
+    #     store = self.store or Store.objects.get_or_create(domain=domain, defaults={"name": domain})[0]
+
+    #     html_content = None
+
+    #     # 1. Спроба завантаження: Fast curl_cffi vs Playwright (Browserless)
+    #     if hasattr(store, 'requires_js') and store.requires_js:
+    #         html_content = self._fetch_with_playwright(store, url)
+    #     else:
+    #         try:
+    #             response = self.session.get(url, headers=self.headers, timeout=15, allow_redirects=True)
+                
+    #             if self._is_js_required_response(response):
+    #                 print(f"[Auto-Detect] Магазин {domain} потребує JS. Перемикаємось на Browserless...")
+    #                 store.requires_js = True
+    #                 store.save(update_fields=['requires_js'])
+    #                 html_content = self._fetch_with_playwright(store, url)
+    #             elif response.status_code == 200:
+    #                 html_content = response.text
+    #             elif response.status_code in (403, 400, 503, 429):
+    #                 print(f"[Scraper] HTTP {response.status_code} для {url}. Перемикаємось на Browserless...")
+    #                 store.requires_js = True
+    #                 store.save(update_fields=['requires_js'])
+    #                 html_content = self._fetch_with_playwright(store, url)
+    #             else:
+    #                 print(f"[Scraper] Статус-код {response.status_code} для {url}")
+    #                 StoreError.objects.create(
+    #                     store=store,
+    #                     url=url,
+    #                     error_type=StoreError.ErrorType.HTTP_ERROR,
+    #                     message=f"HTTP Status: {response.status_code}"
+    #                 )
+    #                 return None
+
+    #         except Exception as e:
+    #             print(f"[Scraper] Помилка curl_cffi для {url}: {e}. Перемикаємось на Browserless...")
+    #             store.requires_js = True
+    #             store.save(update_fields=['requires_js'])
+    #             html_content = self._fetch_with_playwright(store, url)
+
+    #     if not html_content:
+    #         print(f"[Scraper] Не вдалося отримати HTML для {url}")
+    #         return None
+
+    #     # 2. Парсинг витягнутого HTML
+    #     try:
+    #         soup = BeautifulSoup(html_content, 'html.parser')
+    #         json_ld_items = self._collect_json_ld_items(soup)
+
+    #         data: Dict[str, Any] = {}
+    #         data['store_domain'] = domain
+    #         data['title'] = self._get_title(soup, json_ld_items)
+    #         data['price'], data['currency'] = self._get_price_and_currency(soup, json_ld_items)
+    #         data['description'] = self._get_description(soup, json_ld_items)
+
+    #         raw_image = self._get_image_url(soup, json_ld_items)
+    #         data['image_url'] = self._normalize_url(raw_image, base_url=url)
+            
+    #         data['is_in_stock'] = self._get_availability(soup, json_ld_items)
+    #         data['brand_name'] = self._get_brand(soup, json_ld_items)
+    #         data['gtin'] = self._get_gtin(soup, json_ld_items)
+
+    #         # if not data.get('title') or data.get('price') is None:
+    #         #     print(f"[Scraper] Не вдалося витягнути критичні поля (Title/Price) для {url}")
+    #         #     StoreError.objects.create(
+    #         #         store=store,
+    #         #         url=url,
+    #         #         error_type=StoreError.ErrorType.PARSING_FAILED,
+    #         #         message="Missing mandatory fields: Title or Price"
+    #         #     )
+    #         #     return None
+    #         if not data.get('title'):
+    #             print(f"[Scraper] Не вдалося витягнути назву (Title) для {url}")
+    #             StoreError.objects.create(
+    #                 store=store,
+    #                 url=url,
+    #                 error_type=StoreError.ErrorType.PARSING_FAILED,
+    #                 message="Missing mandatory field: Title"
+    #             )
+    #             return None
+
+    #         if data.get('price') is None:
+    #             print(f"[Scraper] Не вдалося витягнути ціну (Price) для {url}")
+    #             StoreError.objects.create(
+    #                 store=store,
+    #                 url=url,
+    #                 error_type=StoreError.ErrorType.PARSING_FAILED,
+    #                 message="Missing mandatory field: Price"
+    #             )
+    #             return None
+
+    #         data['url'] = self._get_canonical_url(soup, json_ld_items, raw_url=url)
+    #         data['raw_input_url'] = url
+    #         return data
+
+    #     except Exception as e:
+    #         print(f"[Scraper] Критична помилка парсингу {url}: {repr(e)}")
+    #         traceback.print_exc()
+    #         StoreError.objects.create(
+    #             store=store,
+    #             url=url,
+    #             error_type=StoreError.ErrorType.UNKNOWN,
+    #             message=str(e)
+    #         )
+    #         return None
     def fetch_product_data(self, url: str) -> Optional[Dict[str, Any]]:
         domain = self._extract_domain(url)
         store = self.store or Store.objects.get_or_create(domain=domain, defaults={"name": domain})[0]
 
         html_content = None
 
-        # 1. Спроба завантаження: Fast curl_cffi vs Playwright (Browserless)
+        # 1. Завантаження первинної сторінки (Fast curl_cffi vs Playwright)
         if hasattr(store, 'requires_js') and store.requires_js:
             html_content = self._fetch_with_playwright(store, url)
         else:
@@ -152,7 +259,39 @@ class UniversalProductScraper:
             print(f"[Scraper] Не вдалося отримати HTML для {url}")
             return None
 
-        # 2. Парсинг витягнутого HTML
+        # 2. Робимо первинний швидкий парсинг, щоб знайти українську альтернативу (hreflang)
+        temp_soup = BeautifulSoup(html_content, 'html.parser')
+        uk_alternative_url = None
+        for link in temp_soup.find_all('link', rel=lambda r: r and 'alternate' in r.lower()):
+            hreflang = str(link.get('hreflang', '')).lower()
+            if hreflang in ['uk', 'uk-ua']:
+                href = link.get('href')
+                if href:
+                    uk_alternative_url = self._normalize_url(href, base_url=url)
+                    break
+
+        # Якщо знайшли українську версію і вона відрізняється від введеної користувачем
+        if uk_alternative_url and quick_clean_url(uk_alternative_url) != quick_clean_url(url):
+            print(f"[Scraper] Знайдено українську версію сторінки: {uk_alternative_url}. Переходимо за нею...")
+            
+            # Повторюємо завантаження вже для українського URL (враховуючи налаштування JS магазину)
+            if store.requires_js:
+                uk_html_content = self._fetch_with_playwright(store, uk_alternative_url)
+            else:
+                try:
+                    uk_response = self.session.get(uk_alternative_url, headers=self.headers, timeout=15, allow_redirects=True)
+                    if uk_response.status_code == 200:
+                        uk_html_content = uk_response.text
+                    else:
+                        uk_html_content = self._fetch_with_playwright(store, uk_alternative_url)
+                except Exception:
+                    uk_html_content = self._fetch_with_playwright(store, uk_alternative_url)
+            
+            if uk_html_content:
+                html_content = uk_html_content
+                url = uk_alternative_url  # Оновлюємо робочий URL на український
+
+        # 3. Основний парсинг фінального HTML (за українським або початковим URL)
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             json_ld_items = self._collect_json_ld_items(soup)
@@ -170,13 +309,23 @@ class UniversalProductScraper:
             data['brand_name'] = self._get_brand(soup, json_ld_items)
             data['gtin'] = self._get_gtin(soup, json_ld_items)
 
-            if not data.get('title') or data.get('price') is None:
-                print(f"[Scraper] Не вдалося витягнути критичні поля (Title/Price) для {url}")
+            if not data.get('title'):
+                print(f"[Scraper] Не вдалося витягнути назву (Title) для {url}")
                 StoreError.objects.create(
                     store=store,
                     url=url,
                     error_type=StoreError.ErrorType.PARSING_FAILED,
-                    message="Missing mandatory fields: Title or Price"
+                    message="Missing mandatory field: Title"
+                )
+                return None
+
+            if data.get('price') is None:
+                print(f"[Scraper] Не вдалося витягнути ціну (Price) {url}")
+                StoreError.objects.create(
+                    store=store,
+                    url=url,
+                    error_type=StoreError.ErrorType.PARSING_FAILED,
+                    message="Missing mandatory field: Price"
                 )
                 return None
 
@@ -194,7 +343,6 @@ class UniversalProductScraper:
                 message=str(e)
             )
             return None
-
     # ------------------------------------------------------------------
     #  Методи завантаження через Browserless Docker Container
     # ------------------------------------------------------------------
@@ -233,10 +381,88 @@ class UniversalProductScraper:
             formatted_cookies.append(cookie_dict)
         return formatted_cookies
 
+    # def _fetch_with_playwright(self, store: Store, url: str) -> Optional[str]:
+    #     session_data = self._get_active_session_data(store)
+        
+    #     # Передаємо параметри для заплутування FingerprintJS
+    #     ws_endpoint = (
+    #         f"ws://{self.browserless_host}"
+    #         f"?token={self.browserless_token}"
+    #         f"&stealth"
+    #         f"&--disable-blink-features=AutomationControlled"
+    #         f"&--no-sandbox"
+    #     )
+
+    #     try:
+    #         with sync_playwright() as p:
+    #             browser = p.chromium.connect_over_cdp(ws_endpoint)
+
+    #             # Створюємо контекст з підміною реальних характеристик пристрою
+    #             context = browser.new_context(
+    #                 viewport={'width': 1920, 'height': 1080},
+    #                 screen={'width': 1920, 'height': 1080},
+    #                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    #                 locale="uk-UA",
+    #                 timezone_id="Europe/Kyiv",
+    #                 device_scale_factor=1,
+    #                 has_touch=False,
+    #                 is_mobile=False,
+    #                 color_scheme='light',
+    #             )
+
+    #             if session_data and "cookies" in session_data:
+    #                 formatted = self._prepare_playwright_cookies(session_data["cookies"])
+    #                 context.add_cookies(formatted)
+
+    #             page = context.new_page()
+
+    #             # Скрипт-антифінгерпринт: підміна атрибутів, які перевіряє FingerprintJS
+    #             page.add_init_script("""
+    #                 // 1. Приховуємо факт автоматизації
+    #                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    #                 // 2. Емуляція плагінів (у headless за замовчуванням порожній масив)
+    #                 Object.defineProperty(navigator, 'plugins', {
+    #                     get: () => [1, 2, 3, 4, 5]
+    #                 });
+
+    #                 // 3. Підміна мов
+    #                 Object.defineProperty(navigator, 'languages', {
+    #                     get: () => ['uk-UA', 'uk', 'en-US', 'en']
+    #                 });
+
+    #                 // 4. Шуми для WebGL Fingerprint (захист від WebGL трекінгу)
+    #                 const getParameter = WebGLRenderingContext.prototype.getParameter;
+    #                 WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    #                     // UNMASKED_VENDOR_WEBGL
+    #                     if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+    #                     // UNMASKED_RENDERER_WEBGL
+    #                     if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+    #                     return getParameter.apply(this, arguments);
+    #                 };
+    #             """)
+
+    #             # Перехід на сторінку
+    #             response = page.goto(url, wait_until="networkidle", timeout=45000)
+                
+    #             # Поведінка людини для спрацювання JS-скриптів
+    #             page.wait_for_timeout(2000)
+    #             page.mouse.move(100, 200)
+    #             page.mouse.wheel(0, 400)
+    #             page.wait_for_timeout(1500)
+
+    #             content = page.content()
+                
+    #             context.close()
+    #             browser.close()
+    #             return content
+
+    #     except Exception as e:
+    #         print(f"[Browserless Error] Не вдалося обійти FingerprintJS для {url}: {e}")
+    #         return None
     def _fetch_with_playwright(self, store: Store, url: str) -> Optional[str]:
         session_data = self._get_active_session_data(store)
         
-        # Передаємо параметри для заплутування FingerprintJS
         ws_endpoint = (
             f"ws://{self.browserless_host}"
             f"?token={self.browserless_token}"
@@ -249,7 +475,6 @@ class UniversalProductScraper:
             with sync_playwright() as p:
                 browser = p.chromium.connect_over_cdp(ws_endpoint)
 
-                # Створюємо контекст з підміною реальних характеристик пристрою
                 context = browser.new_context(
                     viewport={'width': 1920, 'height': 1080},
                     screen={'width': 1920, 'height': 1080},
@@ -268,89 +493,156 @@ class UniversalProductScraper:
 
                 page = context.new_page()
 
-                # Скрипт-антифінгерпринт: підміна атрибутів, які перевіряє FingerprintJS
+                # Антифінгерпринт скрипти (вже є у вашому коді)
                 page.add_init_script("""
-                    // 1. Приховуємо факт автоматизації
                     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-                    // 2. Емуляція плагінів (у headless за замовчуванням порожній масив)
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => [1, 2, 3, 4, 5]
-                    });
-
-                    // 3. Підміна мов
-                    Object.defineProperty(navigator, 'languages', {
-                        get: () => ['uk-UA', 'uk', 'en-US', 'en']
-                    });
-
-                    // 4. Шуми для WebGL Fingerprint (захист від WebGL трекінгу)
-                    const getParameter = WebGLRenderingContext.prototype.getParameter;
-                    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                        // UNMASKED_VENDOR_WEBGL
-                        if (parameter === 37445) return 'Google Inc. (NVIDIA)';
-                        // UNMASKED_RENDERER_WEBGL
-                        if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
-                        return getParameter.apply(this, arguments);
-                    };
+                    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                    Object.defineProperty(navigator, 'languages', { get: () => ['uk-UA', 'uk', 'en-US', 'en'] });
                 """)
 
-                # Перехід на сторінку
-                response = page.goto(url, wait_until="networkidle", timeout=45000)
+                # Перехід на сторінку товару
+                response = page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 
-                # Поведінка людини для спрацювання JS-скриптів
-                page.wait_for_timeout(2000)
-                page.mouse.move(100, 200)
-                page.mouse.wheel(0, 400)
+                # Даємо час на виконання JS-челенджу Horoshop (якщо він є)
                 page.wait_for_timeout(1500)
 
+                # Перевіряємо, чи ми застрягли на сторінці з челенджем (challenge_passed)
                 content = page.content()
+                if "challenge_passed" in content or "performance.now()" in content:
+                    print(f"[Scraper] Виявлено JS-челендж Horoshop для {url}. Проходимо...")
+                    
+                    # Виконуємо скрипт челенджу примусово через браузер, якщо він не спрацював автоматично
+                    page.evaluate("""
+                        () => {
+                            const defaultHash = "7b94bd83bafef4440599990f2fdc28b10c157005de48489bd01d20e06cd12182";
+                            document.cookie = "challenge_passed=" + defaultHash + "; max-age=1800; path=/; samesite=Lax";
+                        }
+                    """)
+                    
+                    # Перезавантажуємо сторінку вже з встановленою кукою
+                    page.reload(wait_until="domcontentloaded", timeout=30000)
+                    page.wait_for_timeout(1500)
+                    content = page.content()
+
+                # Імітація поведінки людини
+                page.mouse.move(100, 200)
+                page.mouse.wheel(0, 400)
+                page.wait_for_timeout(1000)
+
+                final_content = page.content()
                 
                 context.close()
                 browser.close()
-                return content
+                return final_content
 
         except Exception as e:
-            print(f"[Browserless Error] Не вдалося обійти FingerprintJS для {url}: {e}")
+            print(f"[Browserless Error] Не вдалося обійти захист для {url}: {e}")
             return None
 
     # ------------------------------------------------------------------
     #  Збір та очищення JSON-LD / HTML
     # ------------------------------------------------------------------
-    def _collect_json_ld_items(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        items = []
-        scripts = soup.find_all('script', type=lambda t: t and 'ld+json' in str(t).lower())
+    # def _collect_json_ld_items(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    #     items = []
+    #     scripts = soup.find_all('script', type=lambda t: t and 'ld+json' in str(t).lower())
         
-        for script in scripts:
-            raw_text = script.string or script.get_text() or (script.contents[0] if script.contents else '')
-            if not raw_text or not raw_text.strip():
-                continue
+    #     for script in scripts:
+    #         raw_text = script.string or script.get_text() or (script.contents[0] if script.contents else '')
+    #         if not raw_text or not raw_text.strip():
+    #             continue
             
-            payload = self._safe_json_parse(raw_text.strip())
-            if not payload:
+    #         payload = self._safe_json_parse(raw_text.strip())
+    #         if not payload:
+    #             continue
+
+    #         nodes = payload if isinstance(payload, list) else [payload]
+    #         for node in nodes:
+    #             if isinstance(node, dict):
+    #                 if '@graph' in node and isinstance(node['@graph'], list):
+    #                     items.extend([g for g in node['@graph'] if isinstance(g, dict)])
+    #                 else:
+    #                     items.append(node)
+    #     return items
+    def _collect_json_ld_items(
+        self, soup: BeautifulSoup
+    ) -> List[Dict[str, Any]]:
+
+        scripts = soup.find_all(
+            'script',
+            type=lambda t: t and 'ld+json' in str(t).lower()
+        )
+
+        # Резервна спроба, якщо HTML-теги теж екрановані.
+        if not scripts:
+            decoded_html = html.unescape(str(soup))
+            decoded_soup = BeautifulSoup(decoded_html, 'html.parser')
+
+            scripts = decoded_soup.find_all(
+                'script',
+                type=lambda t: t and 'ld+json' in str(t).lower()
+            )
+
+            if scripts:
+                soup = decoded_soup
+
+        items = []
+
+        for script in scripts:
+            raw_text = script.string or script.get_text() or ''
+
+            if not raw_text.strip():
+                continue
+
+            payload = self._safe_json_parse(raw_text)
+
+            if payload is None:
                 continue
 
             nodes = payload if isinstance(payload, list) else [payload]
+
             for node in nodes:
-                if isinstance(node, dict):
-                    if '@graph' in node and isinstance(node['@graph'], list):
-                        items.extend([g for g in node['@graph'] if isinstance(g, dict)])
-                    else:
-                        items.append(node)
+                if not isinstance(node, dict):
+                    continue
+
+                if isinstance(node.get('@graph'), list):
+                    items.extend(
+                        g for g in node['@graph']
+                        if isinstance(g, dict)
+                    )
+                else:
+                    items.append(node)
+
         return items
 
-    def _safe_json_parse(self, text: str) -> Optional[Any]:
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+    # def _safe_json_parse(self, text: str) -> Optional[Any]:
+    #     try:
+    #         return json.loads(text)
+    #     except json.JSONDecodeError:
+    #         pass
 
-        try:
-            sanitized = re.sub(r'("<a href=)"([^"]*)"([^>]*>)', r"\1'\2'\3", text)
-            sanitized = re.sub(r'[\r\n\t]+', ' ', sanitized)
-            return json.loads(sanitized)
-        except Exception:
+    #     try:
+    #         sanitized = re.sub(r'("<a href=)"([^"]*)"([^>]*>)', r"\1'\2'\3", text)
+    #         sanitized = re.sub(r'[\r\n\t]+', ' ', sanitized)
+    #         return json.loads(sanitized)
+    #     except Exception:
+    #         return None
+    def _safe_json_parse(self, text: str) -> Optional[Any]:
+        if not text:
             return None
 
+        raw = text.strip()
+
+        # Спочатку пробуємо звичайний JSON,
+        # потім JSON з HTML-сутностями.
+        candidates = [raw, html.unescape(raw)]
+
+        for candidate in candidates:
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+
+        return None
     def _clean_price(self, raw_val: Any) -> Optional[Decimal]:
         if raw_val is None:
             return None
@@ -384,6 +676,23 @@ class UniversalProductScraper:
     # ------------------------------------------------------------------
     #  Парсинг конкретних полів
     # ------------------------------------------------------------------
+    # def _get_title(self, soup: BeautifulSoup, json_ld_items: List[Dict[str, Any]]) -> Optional[str]:
+    #     for item in json_ld_items:
+    #         itype = str(item.get('@type', '')).lower()
+    #         if any(t in itype for t in ['product', 'productgroup', 'individualproduct']):
+    #             if item.get('name'):
+    #                 return str(item['name']).strip()
+        
+    #     og_title = self._get_meta(soup, 'og:title') or self._get_meta(soup, 'twitter:title')
+    #     if og_title:
+    #         return og_title.strip()
+        
+    #     h1 = soup.find('h1')
+    #     return h1.text.strip() if h1 else None
+
+    #     # В останню чергу шукаємо звичайний тег <title>
+    #     title_tag = soup.find('title')
+    #     return title_tag.text.strip() if title_tag else None
     def _get_title(self, soup: BeautifulSoup, json_ld_items: List[Dict[str, Any]]) -> Optional[str]:
         for item in json_ld_items:
             itype = str(item.get('@type', '')).lower()
@@ -396,7 +705,12 @@ class UniversalProductScraper:
             return og_title.strip()
         
         h1 = soup.find('h1')
-        return h1.text.strip() if h1 else None
+        if h1 and h1.text.strip():
+            return h1.text.strip()
+            
+        # В останню чергу шукаємо звичайний тег <title>
+        title_tag = soup.find('title')
+        return title_tag.text.strip() if title_tag else None
 
     def _extract_price_from_price_spec(self, price_spec: Any) -> Tuple[Optional[Decimal], Optional[str]]:
         specs = []
@@ -422,50 +736,154 @@ class UniversalProductScraper:
 
         return None, None
 
+    # def _get_price_and_currency(
+    #     self, soup: BeautifulSoup, json_ld_items: List[Dict[str, Any]]
+    # ) -> Tuple[Optional[Decimal], str]:
+    #     currency = 'UAH'
+
+    #     for target in json_ld_items:
+    #         if not isinstance(target, dict):
+    #             continue
+
+    #         itype = str(target.get('@type', '')).lower()
+    #         if any(t in itype for t in ['product', 'productgroup', 'individualproduct', 'offer']):
+    #             offers = target if 'offer' in itype else target.get('offers')
+
+    #             if not offers and 'hasVariant' in target:
+    #                 variants = target['hasVariant']
+    #                 if isinstance(variants, list) and variants and isinstance(variants[0], dict):
+    #                     offers = variants[0].get('offers')
+
+    #             offer_list = []
+    #             if isinstance(offers, dict):
+    #                 offer_list = [offers]
+    #             elif isinstance(offers, list):
+    #                 offer_list = [o for o in offers if isinstance(o, dict)]
+
+    #             for offer in offer_list:
+    #                 raw_p = offer.get('price') or offer.get('lowPrice')
+    #                 price_spec = offer.get('priceSpecification')
+
+    #                 parsed_price = self._clean_price(raw_p)
+    #                 parsed_curr = offer.get('priceCurrency')
+
+    #                 if parsed_price is None and price_spec:
+    #                     spec_price, spec_curr = self._extract_price_from_price_spec(price_spec)
+    #                     if spec_price:
+    #                         parsed_price = spec_price
+    #                         if spec_curr:
+    #                             parsed_curr = spec_curr
+
+    #                 if parsed_price is not None:
+    #                     if parsed_curr:
+    #                         currency = parsed_curr
+    #                     return parsed_price, currency
+
+    #     raw_meta_price = (
+    #         self._get_meta(soup, 'product:sale_price:amount') or 
+    #         self._get_meta(soup, 'product:price:amount') or 
+    #         self._get_meta(soup, 'og:price:amount') or
+    #         self._get_meta(soup, 'price') or
+    #         self._get_meta(soup, 'twitter:data1')
+    #     )
+        
+    #     meta_curr = (
+    #         self._get_meta(soup, 'priceCurrency') or
+    #         self._get_meta(soup, 'product:price:currency') or 
+    #         self._get_meta(soup, 'og:price:currency')
+    #     )
+    #     if meta_curr:
+    #         currency = meta_curr
+
+    #     if raw_meta_price:
+    #         price = self._clean_price(raw_meta_price)
+    #         if price is not None:
+    #             return price, currency
+
+    #     price_patterns = [
+    #         {'itemprop': re.compile(r'^price$', re.I)},
+    #         {'class_': re.compile(r'(product-price|current-price|price-new|main-price|price)', re.I)},
+    #         {'id': re.compile(r'(product-price|price-block|mainPrice)', re.I)}
+    #     ]
+
+    #     for pattern in price_patterns:
+    #         elements = soup.find_all(**pattern)
+    #         for element in elements:
+    #             content = element.get('content') or element.get_text(strip=True)
+    #             cleaned = self._clean_price(content)
+    #             if cleaned:
+    #                 return cleaned, currency
+
+    #     return None, currency
     def _get_price_and_currency(
         self, soup: BeautifulSoup, json_ld_items: List[Dict[str, Any]]
     ) -> Tuple[Optional[Decimal], str]:
         currency = 'UAH'
 
-        for target in json_ld_items:
-            if not isinstance(target, dict):
+        # Прямий глибокий пошук цін у будь-якому блоці JSON-LD (ігноруючи тип ноди, якщо там є ціна)
+        all_offers = []
+        for item in json_ld_items:
+            if not isinstance(item, dict):
                 continue
+            
+            # Якщо сам елемент є оффером або містить ціну
+            if 'price' in item:
+                all_offers.append(item)
+                
+            # Якщо всередині є offers
+            offers = item.get('offers')
+            if isinstance(offers, dict):
+                all_offers.append(offers)
+            elif isinstance(offers, list):
+                for o in offers:
+                    if isinstance(o, dict):
+                        all_offers.append(o)
+                        
+            # Перевірка hasVariant
+            variants = item.get('hasVariant')
+            if isinstance(variants, list):
+                for var in variants:
+                    if isinstance(var, dict):
+                        var_offers = var.get('offers')
+                        if isinstance(var_offers, dict):
+                            all_offers.append(var_offers)
+                        elif isinstance(var_offers, list):
+                            all_offers.extend([vo for vo in var_offers if isinstance(vo, dict)])
 
-            itype = str(target.get('@type', '')).lower()
-            if any(t in itype for t in ['product', 'productgroup', 'individualproduct', 'offer']):
-                offers = target if 'offer' in itype else target.get('offers')
+        # 1. Шукаємо серед усіх зібраних офферів той, що в наявності (InStock)
+        for offer in all_offers:
+            availability = str(offer.get('availability', '')).lower()
+            if 'instock' in availability:
+                raw_p = offer.get('price') or offer.get('lowPrice')
+                parsed_price = self._clean_price(raw_p)
+                if parsed_price is not None:
+                    if offer.get('priceCurrency'):
+                        currency = offer.get('priceCurrency')
+                    return parsed_price, currency
 
-                if not offers and 'hasVariant' in target:
-                    variants = target['hasVariant']
-                    if isinstance(variants, list) and variants and isinstance(variants[0], dict):
-                        offers = variants[0].get('offers')
+        # 2. Якщо InStock не знайдено, беремо першу ліпшу ціну з усіх знайдених
+        for offer in all_offers:
+            raw_p = offer.get('price') or offer.get('lowPrice')
+            price_spec = offer.get('priceSpecification')
 
-                offer_list = []
-                if isinstance(offers, dict):
-                    offer_list = [offers]
-                elif isinstance(offers, list):
-                    offer_list = [o for o in offers if isinstance(o, dict)]
+            parsed_price = self._clean_price(raw_p)
+            parsed_curr = offer.get('priceCurrency')
 
-                for offer in offer_list:
-                    raw_p = offer.get('price') or offer.get('lowPrice')
-                    price_spec = offer.get('priceSpecification')
+            if parsed_price is None and price_spec:
+                spec_price, spec_curr = self._extract_price_from_price_spec(price_spec)
+                if spec_price:
+                    parsed_price = spec_price
+                    if spec_curr:
+                        parsed_curr = spec_curr
 
-                    parsed_price = self._clean_price(raw_p)
-                    parsed_curr = offer.get('priceCurrency')
+            if parsed_price is not None:
+                if parsed_curr:
+                    currency = parsed_curr
+                return parsed_price, currency
 
-                    if parsed_price is None and price_spec:
-                        spec_price, spec_curr = self._extract_price_from_price_spec(price_spec)
-                        if spec_price:
-                            parsed_price = spec_price
-                            if spec_curr:
-                                parsed_curr = spec_curr
-
-                    if parsed_price is not None:
-                        if parsed_curr:
-                            currency = parsed_curr
-                        return parsed_price, currency
-
+        # Фолбеки на мета-теги та звичайні CSS-селектори
         raw_meta_price = (
+            self._get_meta(soup, 'product:sale_price:amount') or 
             self._get_meta(soup, 'product:price:amount') or 
             self._get_meta(soup, 'og:price:amount') or
             self._get_meta(soup, 'price') or
@@ -487,8 +905,8 @@ class UniversalProductScraper:
 
         price_patterns = [
             {'itemprop': re.compile(r'^price$', re.I)},
-            {'class_': re.compile(r'(product-price|current-price|price-new|main-price)', re.I)},
-            {'id': re.compile(r'(product-price|price-block)', re.I)}
+            {'class_': re.compile(r'(product-price|current-price|price-new|main-price|price)', re.I)},
+            {'id': re.compile(r'(product-price|price-block|mainPrice)', re.I)}
         ]
 
         for pattern in price_patterns:
@@ -632,6 +1050,14 @@ class UniversalProductScraper:
 
         html = response.text.lower()
         js_protection_patterns = [
+            # 'just a moment...',
+            # 'enable javascript',
+            # 'cf-browser-verification',
+            # 'chk_jschl',
+            # 'ddos-guard',
+            # 'access denied',
+            # '<div id="app"></div>',
+            # '<div id="root"></div>'
             'just a moment...',
             'enable javascript',
             'cf-browser-verification',
@@ -639,7 +1065,9 @@ class UniversalProductScraper:
             'ddos-guard',
             'access denied',
             '<div id="app"></div>',
-            '<div id="root"></div>'
+            '<div id="root"></div>',
+            'challenge_passed',  # <--- Додаємо детект захисту Horoshop
+            'performance.now()'  # <--- Додаємо детект циклу навантаження
         ]
         return any(pattern in html for pattern in js_protection_patterns)
 
@@ -690,19 +1118,33 @@ class UniversalProductScraper:
         ))
 
     def _get_canonical_url(self, soup: BeautifulSoup, json_ld_items: List[Dict[str, Any]], raw_url: str) -> str:
-        canonical_link = soup.find('link', rel='canonical')
+        # 1. Пріоритет: пошук української альтернативної версії сторінки (hreflang="uk" або "uk-UA")
+        for link in soup.find_all('link', rel=lambda r: r and 'alternate' in r.lower()):
+            hreflang = str(link.get('hreflang', '')).lower()
+            if hreflang in ['uk', 'uk-ua']:
+                href = link.get('href')
+                if href:
+                    normalized = self._normalize_url(href, base_url=raw_url)
+                    if normalized:
+                        return normalized
+
+        # 2. Канонічне посилання (<link rel="canonical">) — якщо української версії немає або сайт одномовний
+        canonical_link = soup.find('link', rel=lambda r: r and 'canonical' in r.lower())
         if canonical_link and canonical_link.get('href'):
             return self._normalize_url(canonical_link['href'], base_url=raw_url) or raw_url
 
+        # 3. Open Graph URL (og:url)
         og_url = self._get_meta(soup, 'og:url')
         if og_url:
             return self._normalize_url(og_url, base_url=raw_url) or raw_url
 
+        # 4. JSON-LD дані (Product / ProductGroup)
         for item in json_ld_items:
             itype = str(item.get('@type', '')).lower()
             if any(t in itype for t in ['product', 'productgroup']) and item.get('url'):
                 return self._normalize_url(item['url'], base_url=raw_url) or raw_url
 
+        # 5. Фолбек: повертаємо вхідний URL без UTM-міток
         return self._clean_utm_params(raw_url)
 
 

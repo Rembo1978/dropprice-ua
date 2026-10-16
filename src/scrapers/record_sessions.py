@@ -8,7 +8,7 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 
 STORES_TO_RECORD = [
     {"name": "sephora_pl", "url": "https://www.sephora.pl"},
-    {"name": "iherb", "url": "https://www.iherb.com"},
+    {"name": "iherb", "url": "https://ua.iherb.com"},
 ]
 
 def record_store_session(store_name: str, target_url: str):

@@ -195,5 +195,5 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
-TELEGRAM_BOT_TOKEN = "8775750921:AAEAruPbjZbsBSwIwlcTKwtPOKvOLJub8d0"
-TELEGRAM_BOT_USERNAME = "dropprice_test_bot"
+TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_USERNAME = env("TELEGRAM_BOT_USERNAME")
