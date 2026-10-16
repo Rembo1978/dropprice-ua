@@ -17,7 +17,6 @@ class BulkCashbackRateIngestView(APIView):
     """
     API для імпорту ставок кешбеку з парсера LetyShops.
     Вимагає Token-авторизацію у заголовку Header:
-    Authorization: Token 60282c1432f98a546c6587e51db6cf5b24026824
     """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
